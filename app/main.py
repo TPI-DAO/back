@@ -3,6 +3,7 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, OperationalError
@@ -56,6 +57,14 @@ app = FastAPI(
     description="TP Integrador DAO 2026 - Grupo 5. Gestión de sedes, socios, catálogo, préstamos, reservas, remitos y devoluciones.",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origen.strip() for origen in settings.cors_origins.split(",") if origen.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
