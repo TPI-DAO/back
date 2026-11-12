@@ -8,7 +8,13 @@ from app.config import settings
 from app.errors import ConflictoError, ReglaNegocioError
 from app.models import REMITO_SEQ, Ejemplar, HistorialRemito, Prestamo, Remito
 from app.patterns.remito_state import estado_de
-from app.services.common import ESTADO_EJEMPLAR_POR_FISICO, exigir_sede_activa, obtener
+from app.services.common import (
+    ESTADO_EJEMPLAR_POR_FISICO,
+    exigir_sede_activa,
+    obtener,
+    restaurar_reserva_cumplida,
+    sede_tiene_ejemplar_utilizable,
+)
 from app.utils import utcnow
 
 
@@ -137,6 +143,8 @@ def recibir(db: Session, remito_id: int, estado_fisico: E.EstadoFisico, observac
         else:
             ejemplar.estado_id = ESTADO_EJEMPLAR_POR_FISICO[estado_fisico]
             prestamo.estado_id = E.EstadoPrestamo.CANCELADO
+            if sede_tiene_ejemplar_utilizable(db, prestamo.sede_origen_id, prestamo.libro_id):
+                restaurar_reserva_cumplida(db, prestamo)
     else:  # RETORNO a la sede dueña
         if estado_fisico != E.EstadoFisico.BUENO:
             ejemplar.estado_id = ESTADO_EJEMPLAR_POR_FISICO[estado_fisico]

@@ -8,7 +8,12 @@ from app.config import settings
 from app.errors import ConflictoError, ReglaNegocioError
 from app.models import Ejemplar, Libro, Prestamo, Reserva, Sede, Socio
 from app.services import remitos as remitos_svc
-from app.services.common import ESTADOS_PRESTAMO_ABIERTOS, exigir_sede_activa, obtener
+from app.services.common import (
+    ESTADOS_PRESTAMO_ABIERTOS,
+    exigir_sede_activa,
+    obtener,
+    restaurar_reserva_cumplida,
+)
 from app.utils import utcnow
 
 
@@ -117,6 +122,7 @@ def cancelar_prestamo(db: Session, prestamo_id: int) -> Prestamo:
     ejemplar = obtener(db, Ejemplar, prestamo.ejemplar_id, "Ejemplar", bloquear=True)
     ejemplar.estado_id = E.EstadoEjemplar.DISPONIBLE
     prestamo.estado_id = E.EstadoPrestamo.CANCELADO
+    restaurar_reserva_cumplida(db, prestamo)
     db.commit()
     return prestamo
 
