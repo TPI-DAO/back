@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 
 from app import enums as E
 from app.database import DB
 from app.errors import ConflictoError, ReglaNegocioError
-from app.models import Ejemplar, Libro, Sede
+from app.models import Ejemplar, Libro, Sede, Usuario
 from app.schemas import EjemplarCreate, EjemplarOut, EjemplarUpdate
+from app.security import CurrentUser, require_admin
 from app.services.common import exigir_sede_activa, obtener
 
 router = APIRouter(prefix="/ejemplares", tags=["Ejemplares"])
@@ -20,7 +21,7 @@ def _verificar_codigo_libre(db, codigo: str, excluir_id: int | None = None):
 
 
 @router.post("", response_model=EjemplarOut, status_code=201, summary="Registrar ejemplar")
-def registrar_ejemplar(data: EjemplarCreate, db: DB):
+def registrar_ejemplar(data: EjemplarCreate, db: DB, _admin: Usuario = Depends(require_admin)):
     obtener(db, Libro, data.libro_id, "Libro")
     sede = obtener(db, Sede, data.sede_id, "Sede")
     exigir_sede_activa(sede)
@@ -40,6 +41,7 @@ def registrar_ejemplar(data: EjemplarCreate, db: DB):
 @router.get("", response_model=list[EjemplarOut], summary="Consultar ejemplares")
 def listar_ejemplares(
     db: DB,
+    _usuario: CurrentUser,
     libro_id: int | None = None,
     sede_id: int | None = None,
     estado: str | None = None,
@@ -60,12 +62,14 @@ def listar_ejemplares(
 
 
 @router.get("/{ejemplar_id}", response_model=EjemplarOut)
-def obtener_ejemplar(ejemplar_id: int, db: DB):
+def obtener_ejemplar(ejemplar_id: int, db: DB, _usuario: CurrentUser):
     return obtener(db, Ejemplar, ejemplar_id, "Ejemplar")
 
 
 @router.put("/{ejemplar_id}", response_model=EjemplarOut, summary="Modificar ejemplar")
-def modificar_ejemplar(ejemplar_id: int, data: EjemplarUpdate, db: DB):
+def modificar_ejemplar(
+    ejemplar_id: int, data: EjemplarUpdate, db: DB, _admin: Usuario = Depends(require_admin)
+):
     ejemplar = obtener(db, Ejemplar, ejemplar_id, "Ejemplar", bloquear=True)
     cambios = data.model_dump(exclude_unset=True)
     if ejemplar.estado_id not in (E.EstadoEjemplar.DISPONIBLE, E.EstadoEjemplar.DANADO):
@@ -87,7 +91,7 @@ def modificar_ejemplar(ejemplar_id: int, data: EjemplarUpdate, db: DB):
 
 
 @router.post("/{ejemplar_id}/baja", response_model=EjemplarOut, summary="Dar de baja ejemplar")
-def dar_de_baja(ejemplar_id: int, db: DB):
+def dar_de_baja(ejemplar_id: int, db: DB, _admin: Usuario = Depends(require_admin)):
     ejemplar = obtener(db, Ejemplar, ejemplar_id, "Ejemplar", bloquear=True)
     if ejemplar.estado_id not in (E.EstadoEjemplar.DISPONIBLE, E.EstadoEjemplar.DANADO):
         raise ReglaNegocioError(

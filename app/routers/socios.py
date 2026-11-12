@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import or_, select
 
 from app import enums as E
 from app.database import DB
 from app.errors import ConflictoError, ReglaNegocioError
-from app.models import Socio
+from app.models import Socio, Usuario
 from app.schemas import SocioCreate, SocioEstadoIn, SocioOut, SocioUpdate
+from app.security import CurrentUser, require_admin
 from app.services.common import obtener
 
 router = APIRouter(prefix="/socios", tags=["Socios"])
@@ -20,7 +21,7 @@ def _verificar_dni_libre(db, dni: str, excluir_id: int | None = None):
 
 
 @router.post("", response_model=SocioOut, status_code=201, summary="Registrar socio")
-def registrar_socio(data: SocioCreate, db: DB):
+def registrar_socio(data: SocioCreate, db: DB, _admin: Usuario = Depends(require_admin)):
     _verificar_dni_libre(db, data.dni)
     socio = Socio(**data.model_dump())
     db.add(socio)
@@ -29,7 +30,12 @@ def registrar_socio(data: SocioCreate, db: DB):
 
 
 @router.get("", response_model=list[SocioOut], summary="Consultar socios")
-def listar_socios(db: DB, q: str | None = None, estado: str | None = None):
+def listar_socios(
+    db: DB,
+    _admin: Usuario = Depends(require_admin),
+    q: str | None = None,
+    estado: str | None = None,
+):
     stmt = select(Socio).order_by(Socio.apellido, Socio.nombre)
     if q:
         like = f"%{q}%"
@@ -42,13 +48,22 @@ def listar_socios(db: DB, q: str | None = None, estado: str | None = None):
     return db.scalars(stmt).all()
 
 
+@router.get("/me", response_model=SocioOut, summary="Datos del socio autenticado")
+def obtener_mi_socio(usuario: CurrentUser, db: DB):
+    if usuario.socio_id is None:
+        raise ReglaNegocioError("El usuario autenticado no tiene un socio asociado.")
+    return obtener(db, Socio, usuario.socio_id, "Socio")
+
+
 @router.get("/{socio_id}", response_model=SocioOut)
-def obtener_socio(socio_id: int, db: DB):
+def obtener_socio(socio_id: int, db: DB, _admin: Usuario = Depends(require_admin)):
     return obtener(db, Socio, socio_id, "Socio")
 
 
 @router.put("/{socio_id}", response_model=SocioOut, summary="Modificar socio")
-def modificar_socio(socio_id: int, data: SocioUpdate, db: DB):
+def modificar_socio(
+    socio_id: int, data: SocioUpdate, db: DB, _admin: Usuario = Depends(require_admin)
+):
     socio = obtener(db, Socio, socio_id, "Socio")
     cambios = data.model_dump(exclude_unset=True)
     if cambios.get("dni"):
@@ -60,7 +75,9 @@ def modificar_socio(socio_id: int, data: SocioUpdate, db: DB):
 
 
 @router.patch("/{socio_id}/estado", response_model=SocioOut, summary="Habilitar / inhabilitar socio")
-def cambiar_estado_socio(socio_id: int, data: SocioEstadoIn, db: DB):
+def cambiar_estado_socio(
+    socio_id: int, data: SocioEstadoIn, db: DB, _admin: Usuario = Depends(require_admin)
+):
     socio = obtener(db, Socio, socio_id, "Socio")
     socio.estado_id = E.EstadoSocio[data.estado]
     db.commit()

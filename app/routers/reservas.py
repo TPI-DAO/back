@@ -6,6 +6,7 @@ from app.database import DB
 from app.errors import ReglaNegocioError
 from app.models import Reserva
 from app.schemas import ReservaCreate, ReservaOut
+from app.security import CurrentUser, exigir_socio_propio, socio_id_de
 from app.services import reservas as svc
 from app.services.common import obtener
 
@@ -13,19 +14,23 @@ router = APIRouter(prefix="/reservas", tags=["Reservas"])
 
 
 @router.post("", response_model=ReservaOut, status_code=201, summary="Registrar reserva")
-def registrar_reserva(data: ReservaCreate, db: DB):
+def registrar_reserva(data: ReservaCreate, db: DB, usuario: CurrentUser):
+    exigir_socio_propio(usuario, data.socio_id)
     return svc.crear_reserva(db, data.socio_id, data.libro_id, data.sede_id)
 
 
 @router.get("", response_model=list[ReservaOut], summary="Consultar reservas")
 def listar_reservas(
     db: DB,
+    usuario: CurrentUser,
     socio_id: int | None = None,
     libro_id: int | None = None,
     sede_id: int | None = None,
     estado: str | None = None,
 ):
     stmt = select(Reserva).order_by(Reserva.id.desc())
+    if not usuario.es_admin:
+        stmt = stmt.where(Reserva.socio_id == socio_id_de(usuario))
     if socio_id:
         stmt = stmt.where(Reserva.socio_id == socio_id)
     if libro_id:
@@ -41,10 +46,14 @@ def listar_reservas(
 
 
 @router.get("/{reserva_id}", response_model=ReservaOut)
-def obtener_reserva(reserva_id: int, db: DB):
-    return obtener(db, Reserva, reserva_id, "Reserva")
+def obtener_reserva(reserva_id: int, db: DB, usuario: CurrentUser):
+    reserva = obtener(db, Reserva, reserva_id, "Reserva")
+    exigir_socio_propio(usuario, reserva.socio_id)
+    return reserva
 
 
 @router.post("/{reserva_id}/cancelar", response_model=ReservaOut, summary="Cancelar reserva")
-def cancelar_reserva(reserva_id: int, db: DB):
+def cancelar_reserva(reserva_id: int, db: DB, usuario: CurrentUser):
+    reserva = obtener(db, Reserva, reserva_id, "Reserva")
+    exigir_socio_propio(usuario, reserva.socio_id)
     return svc.cancelar_reserva(db, reserva_id)

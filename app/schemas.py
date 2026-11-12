@@ -247,3 +247,40 @@ class DevolucionOut(ORM):
     dias_atraso: int
     multa: Decimal
     remito_retorno_id: int | None
+
+
+# ---- autenticación y usuarios
+class TokenOut(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+    rol: str
+    socio_id: int | None
+    expira_en_minutos: int
+
+
+class UsuarioCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=50, pattern=r"^[A-Za-z0-9._-]+$")
+    email: str = Field(min_length=5, max_length=255)
+    password: str = Field(min_length=8, max_length=128)
+    rol: Literal["ADMIN", "SOCIO"] = "SOCIO"
+    socio_id: int | None = None
+
+
+class UsuarioEstadoIn(BaseModel):
+    activo: bool
+
+
+class UsuarioOut(ORM):
+    id: int
+    username: str
+    email: str
+    rol: str
+    socio_id: int | None
+    activo: bool
+    fecha_alta: datetime
+
+
+class PasswordUpdate(BaseModel):
+    password_actual: str
+    password_nueva: str = Field(min_length=8, max_length=128)

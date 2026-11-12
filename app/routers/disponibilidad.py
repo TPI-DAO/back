@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.database import DB
+from app.security import CurrentUser
 from app.services.disponibilidad import consultar_disponibilidad
 
 router = APIRouter(prefix="/disponibilidad", tags=["Disponibilidad"])
@@ -9,6 +10,7 @@ router = APIRouter(prefix="/disponibilidad", tags=["Disponibilidad"])
 @router.get("", summary="Consultar disponibilidad de libros por sede")
 def disponibilidad(
     db: DB,
+    _usuario: CurrentUser,
     libro_id: int | None = None,
     sede_id: int | None = None,
     titulo: str | None = None,

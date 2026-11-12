@@ -18,5 +18,14 @@ class ReglaNegocioError(AppError):
     status_code = 422
 
 
+class NoAutenticadoError(AppError):
+    status_code = 401
+    headers = {"WWW-Authenticate": "Bearer"}
+
+
+class PermisoDenegadoError(AppError):
+    status_code = 403
+
+
 class TransicionInvalidaError(ConflictoError):
     pass

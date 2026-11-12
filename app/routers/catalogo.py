@@ -1,9 +1,9 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 
 from app.database import DB
 from app.errors import ConflictoError, ReglaNegocioError
-from app.models import Autor, Editorial, Ejemplar, Genero, Libro
+from app.models import Autor, Editorial, Ejemplar, Genero, Libro, Usuario
 from app.schemas import (
     AutorOut,
     EditorialIn,
@@ -14,6 +14,7 @@ from app.schemas import (
     LibroUpdate,
     NombreIn,
 )
+from app.security import CurrentUser, require_admin
 from app.services.common import obtener
 
 
@@ -29,11 +30,11 @@ def _router_catalogo(prefix: str, tag: str, Modelo, campo: str, In, Out) -> APIR
             raise ConflictoError(f"'{valor}' ya existe en {tag}.")
 
     @r.get("", response_model=list[Out])
-    def listar(db: DB):
+    def listar(db: DB, _usuario: CurrentUser):
         return db.scalars(select(Modelo).order_by(columna)).all()
 
     @r.post("", response_model=Out, status_code=201)
-    def crear(data: In, db: DB):
+    def crear(data: In, db: DB, _admin: Usuario = Depends(require_admin)):
         valor = getattr(data, campo)
         _verificar(db, valor)
         obj = Modelo(**{campo: valor})
@@ -42,11 +43,11 @@ def _router_catalogo(prefix: str, tag: str, Modelo, campo: str, In, Out) -> APIR
         return obj
 
     @r.get("/{id_}", response_model=Out)
-    def ver(id_: int, db: DB):
+    def ver(id_: int, db: DB, _usuario: CurrentUser):
         return obtener(db, Modelo, id_, tag)
 
     @r.put("/{id_}", response_model=Out)
-    def modificar(id_: int, data: In, db: DB):
+    def modificar(id_: int, data: In, db: DB, _admin: Usuario = Depends(require_admin)):
         obj = obtener(db, Modelo, id_, tag)
         valor = getattr(data, campo)
         _verificar(db, valor, id_)
@@ -86,7 +87,7 @@ def _verificar_isbn_libre(db, isbn: str, excluir_id: int | None = None):
 
 
 @libros_router.post("", response_model=LibroOut, status_code=201, summary="Registrar libro")
-def registrar_libro(data: LibroCreate, db: DB):
+def registrar_libro(data: LibroCreate, db: DB, _admin: Usuario = Depends(require_admin)):
     isbn = _normalizar_isbn(data.isbn)
     _verificar_isbn_libre(db, isbn)
     _verificar_fks(db, data.genero_id, data.autor_id, data.editorial_id)
@@ -99,6 +100,7 @@ def registrar_libro(data: LibroCreate, db: DB):
 @libros_router.get("", response_model=list[LibroOut], summary="Consultar libros")
 def listar_libros(
     db: DB,
+    _usuario: CurrentUser,
     q: str | None = None,
     autor_id: int | None = None,
     genero_id: int | None = None,
@@ -117,12 +119,14 @@ def listar_libros(
 
 
 @libros_router.get("/{libro_id}", response_model=LibroOut)
-def obtener_libro(libro_id: int, db: DB):
+def obtener_libro(libro_id: int, db: DB, _usuario: CurrentUser):
     return obtener(db, Libro, libro_id, "Libro")
 
 
 @libros_router.put("/{libro_id}", response_model=LibroOut, summary="Modificar libro")
-def modificar_libro(libro_id: int, data: LibroUpdate, db: DB):
+def modificar_libro(
+    libro_id: int, data: LibroUpdate, db: DB, _admin: Usuario = Depends(require_admin)
+):
     libro = obtener(db, Libro, libro_id, "Libro")
     cambios = data.model_dump(exclude_unset=True)
     if cambios.get("isbn"):
@@ -136,7 +140,7 @@ def modificar_libro(libro_id: int, data: LibroUpdate, db: DB):
 
 
 @libros_router.delete("/{libro_id}", status_code=204, summary="Eliminar libro")
-def eliminar_libro(libro_id: int, db: DB):
+def eliminar_libro(libro_id: int, db: DB, _admin: Usuario = Depends(require_admin)):
     libro = obtener(db, Libro, libro_id, "Libro")
     if db.scalar(select(func.count()).select_from(Ejemplar).where(Ejemplar.libro_id == libro_id)):
         raise ReglaNegocioError("No se puede eliminar un libro que tiene ejemplares registrados.")

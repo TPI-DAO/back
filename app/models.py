@@ -16,7 +16,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Index, Numeric, Sequence, String
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Numeric, Sequence, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app import enums as E
@@ -121,6 +121,25 @@ class Socio(Base):
     @property
     def estado(self) -> str:
         return E.EstadoSocio(self.estado_id).name
+
+
+# ---------------------------------------------------------------- usuarios
+class Usuario(Base):
+    __tablename__ = "usuarios"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    rol: Mapped[str] = mapped_column(String(10), default=E.RolUsuario.SOCIO.value)
+    socio_id: Mapped[int | None] = mapped_column(ForeignKey("socios.id"), unique=True)
+    activo: Mapped[bool] = mapped_column(Boolean, default=True)
+    fecha_alta: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    socio: Mapped[Socio | None] = relationship()
+
+    @property
+    def es_admin(self) -> bool:
+        return self.rol == E.RolUsuario.ADMIN.value
 
 
 # ---------------------------------------------------------------- ejemplares

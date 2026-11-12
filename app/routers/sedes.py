@@ -1,11 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, update
 
 from app import enums as E
 from app.database import DB
 from app.errors import ConflictoError, ReglaNegocioError
-from app.models import Prestamo, Remito, Reserva, Sede
+from app.models import Prestamo, Remito, Reserva, Sede, Usuario
 from app.schemas import SedeCreate, SedeEstadoIn, SedeOut, SedeUpdate
+from app.security import CurrentUser, require_admin
 from app.services.common import ESTADOS_PRESTAMO_ABIERTOS, obtener
 
 router = APIRouter(prefix="/sedes", tags=["Sedes"])
@@ -20,7 +21,7 @@ def _verificar_nombre_libre(db, nombre: str, excluir_id: int | None = None):
 
 
 @router.post("", response_model=SedeOut, status_code=201, summary="Registrar sede")
-def registrar_sede(data: SedeCreate, db: DB):
+def registrar_sede(data: SedeCreate, db: DB, _admin: Usuario = Depends(require_admin)):
     _verificar_nombre_libre(db, data.nombre)
     sede = Sede(**data.model_dump())
     db.add(sede)
@@ -29,7 +30,7 @@ def registrar_sede(data: SedeCreate, db: DB):
 
 
 @router.get("", response_model=list[SedeOut], summary="Consultar sedes")
-def listar_sedes(db: DB, estado: str | None = None):
+def listar_sedes(db: DB, _usuario: CurrentUser, estado: str | None = None):
     stmt = select(Sede).order_by(Sede.nombre)
     if estado:
         try:
@@ -40,12 +41,12 @@ def listar_sedes(db: DB, estado: str | None = None):
 
 
 @router.get("/{sede_id}", response_model=SedeOut)
-def obtener_sede(sede_id: int, db: DB):
+def obtener_sede(sede_id: int, db: DB, _usuario: CurrentUser):
     return obtener(db, Sede, sede_id, "Sede")
 
 
 @router.put("/{sede_id}", response_model=SedeOut, summary="Modificar sede")
-def modificar_sede(sede_id: int, data: SedeUpdate, db: DB):
+def modificar_sede(sede_id: int, data: SedeUpdate, db: DB, _admin: Usuario = Depends(require_admin)):
     sede = obtener(db, Sede, sede_id, "Sede")
     cambios = data.model_dump(exclude_unset=True)
     if "nombre" in cambios and cambios["nombre"]:
@@ -57,7 +58,9 @@ def modificar_sede(sede_id: int, data: SedeUpdate, db: DB):
 
 
 @router.patch("/{sede_id}/estado", response_model=SedeOut, summary="Dar de alta / baja una sede")
-def cambiar_estado_sede(sede_id: int, data: SedeEstadoIn, db: DB):
+def cambiar_estado_sede(
+    sede_id: int, data: SedeEstadoIn, db: DB, _admin: Usuario = Depends(require_admin)
+):
     sede = obtener(db, Sede, sede_id, "Sede")
     nuevo = E.EstadoSede[data.estado]
     if nuevo == E.EstadoSede.BAJA:

@@ -56,3 +56,8 @@ class EstadoFisico(str, Enum):
     DANADO = "DANADO"
     EXTRAVIADO = "EXTRAVIADO"
     DESTRUIDO = "DESTRUIDO"
+
+
+class RolUsuario(str, Enum):
+    ADMIN = "ADMIN"   # personal de la biblioteca: gestión completa
+    SOCIO = "SOCIO"   # cliente/lector: consulta y gestiona sus propios datos

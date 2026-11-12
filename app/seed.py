@@ -1,8 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import enums as E
 from app import models as M
+from app.config import settings
+from app.security import hashear_password
 
 
 def seed_catalogos(db: Session) -> None:
@@ -18,6 +20,26 @@ def seed_catalogos(db: Session) -> None:
     for modelo, enum in pares:
         for miembro in enum:
             db.merge(modelo(id=int(miembro), descripcion=miembro.name))
+    db.commit()
+
+
+def seed_admin(db: Session) -> None:
+    """Crea el usuario administrador inicial si todavía no existe."""
+    existente = db.scalar(
+        select(M.Usuario.id).where(
+            func.lower(M.Usuario.username) == settings.admin_username.lower()
+        )
+    )
+    if existente:
+        return
+    db.add(
+        M.Usuario(
+            username=settings.admin_username,
+            email=settings.admin_email.lower(),
+            password_hash=hashear_password(settings.admin_password),
+            rol=E.RolUsuario.ADMIN.value,
+        )
+    )
     db.commit()
 
 

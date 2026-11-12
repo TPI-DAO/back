@@ -16,6 +16,22 @@ Local sin Docker: `uv sync && uv run uvicorn app.main:app --reload` (con un Post
 Tests de los patrones: `uv run pytest`.
 Opcional: `uv lock` para fijar versiones (el Dockerfile usa `uv.lock` si existe).
 
+## Autenticación y roles
+
+- **ADMIN** (personal de la biblioteca): acceso completo.
+- **SOCIO** (cliente/lector): consulta catálogo/disponibilidad y gestiona sus propios préstamos, reservas y devoluciones.
+
+El administrador inicial se crea al arrancar con `ADMIN_USERNAME` / `ADMIN_PASSWORD` (por defecto `admin` / `admin1234`).
+
+```bash
+curl -X POST http://localhost:8000/auth/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=admin&password=admin1234"
+```
+
+La respuesta incluye `access_token`, que va en cada request como `Authorization: Bearer <token>`.
+En Swagger (`/docs`) usar el botón **Authorize**. Los endpoints de remitos, reportes y la gestión de socios requieren rol `ADMIN`; las cuentas de socios se crean con `POST /auth/usuarios`.
+
 ## Correspondencia con el modelo del TP
 
 | Modelo original | Implementación |
