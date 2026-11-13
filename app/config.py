@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     max_prestamos_por_socio: int = 3
     multa_estrategia: str = "diaria"  # diaria | escalonada
     multa_monto_dia: Decimal = Decimal("50")
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"
     seed_demo_data: bool = True
 
 

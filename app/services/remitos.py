@@ -41,6 +41,8 @@ def crear_remito(
     destino_id: int,
     observacion: str | None = None,
 ) -> Remito:
+    exigir_sede_activa(prestamo.sede_origen, "origen")
+    exigir_sede_activa(prestamo.sede_destino, "destino")
     numero = db.scalar(select(REMITO_SEQ.next_value()))
     remito = Remito(
         numero=f"REM-{numero:06d}",

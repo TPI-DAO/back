@@ -1,11 +1,13 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
 from app import enums as E
-from app.errors import TransicionInvalidaError
+from app.errors import ReglaNegocioError, TransicionInvalidaError
 from app.patterns.multa_strategy import MultaDiaria, MultaEscalonada, obtener_estrategia
 from app.patterns.remito_state import estado_de
+from app.services.remitos import crear_remito
 
 
 def test_ciclo_feliz_del_remito():
@@ -33,6 +35,22 @@ def test_estados_terminales(estado):
 def test_no_se_puede_recibir_sin_despachar():
     with pytest.raises(TransicionInvalidaError):
         estado_de(E.EstadoRemito.EMPAQUETADO).recibir()
+
+
+def test_no_se_crea_remito_de_retorno_hacia_sede_inactiva():
+    prestamo = SimpleNamespace(
+        sede_origen=SimpleNamespace(estado_id=E.EstadoSede.ACTIVA, nombre="Origen"),
+        sede_destino=SimpleNamespace(estado_id=E.EstadoSede.BAJA, nombre="Destino"),
+    )
+
+    with pytest.raises(ReglaNegocioError, match="dada de baja"):
+        crear_remito(
+            None,
+            prestamo=prestamo,
+            tipo=E.TipoRemito.RETORNO,
+            origen_id=2,
+            destino_id=1,
+        )
 
 
 def test_multa_diaria():
