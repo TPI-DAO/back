@@ -24,6 +24,14 @@ def _rango(col, desde: date | None, hasta: date | None) -> list:
     return conds
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 @router.get("/prestamos-activos-y-en-transito", summary="1. Préstamos activos y material en tránsito")
 def prestamos_activos_y_en_transito(db: DB, sede_id: int | None = None):
     q = (
@@ -34,7 +42,11 @@ def prestamos_activos_y_en_transito(db: DB, sede_id: int | None = None):
             joinedload(Prestamo.sede_origen),
             joinedload(Prestamo.sede_destino),
         )
-        .where(Prestamo.estado_id.in_([E.EstadoPrestamo.ACTIVO, E.EstadoPrestamo.VENCIDO]))
+        .where(
+            Prestamo.estado_id.in_(
+                [E.EstadoPrestamo.ACTIVO, E.EstadoPrestamo.VENCIDO, E.EstadoPrestamo.EN_TRANSITO]
+            )
+        )
         .order_by(Prestamo.fecha_vencimiento)
     )
     rq = (
@@ -77,7 +89,7 @@ def prestamos_activos_y_en_transito(db: DB, sede_id: int | None = None):
                 "sede_origen": r.sede_origen.nombre,
                 "sede_destino": r.sede_destino.nombre,
                 "fecha_salida": r.fecha_salida,
-                "horas_en_transito": round((ahora - r.fecha_salida).total_seconds() / 3600, 2),
+                "horas_en_transito": round((ahora - _utc(r.fecha_salida)).total_seconds() / 3600, 2) if r.fecha_salida else None,
             }
             for r in remitos
         ],

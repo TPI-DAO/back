@@ -1,3 +1,5 @@
+from datetime import date, datetime, timedelta, timezone
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -44,9 +46,11 @@ def seed_admin(db: Session) -> None:
 
 
 def seed_demo(db: Session) -> None:
-    """Datos de ejemplo (solo si la base no tiene sedes)."""
+    """Datos de ejemplo con volumen realista para parecer actividad operacional."""
     if db.scalar(select(M.Sede.id).limit(1)):
         return
+
+    now = datetime.now(timezone.utc)
     sedes = [
         M.Sede(nombre="Sede Central", direccion="Av. Colón 100, Córdoba", correo="central@biblio.test", telefono="351-4000001", horarios="Lun-Vie 8-20"),
         M.Sede(nombre="Sede Norte", direccion="Av. Monseñor Pablo Cabrera 2500, Córdoba", correo="norte@biblio.test", telefono="351-4000002", horarios="Lun-Vie 9-18"),
@@ -56,24 +60,158 @@ def seed_demo(db: Session) -> None:
         M.Socio(dni="30111222", nombre="Ana", apellido="García", telefono="351-1111111"),
         M.Socio(dni="31222333", nombre="Luis", apellido="Pérez", telefono="351-2222222"),
         M.Socio(dni="32333444", nombre="María", apellido="López", telefono="351-3333333"),
+        M.Socio(dni="33444555", nombre="Diego", apellido="Fernández", telefono="351-4444444"),
+        M.Socio(dni="34555666", nombre="Sofía", apellido="Molina", telefono="351-5555555"),
+        M.Socio(dni="35666777", nombre="Ramón", apellido="Torres", telefono="351-6666666"),
     ]
-    generos = [M.Genero(nombre="Novela"), M.Genero(nombre="Ciencia"), M.Genero(nombre="Informática")]
-    autores = [M.Autor(nombre="Jorge Luis Borges"), M.Autor(nombre="Carl Sagan"), M.Autor(nombre="Robert C. Martin")]
-    editoriales = [M.Editorial(descripcion="Sudamericana"), M.Editorial(descripcion="Planeta"), M.Editorial(descripcion="Prentice Hall")]
+    generos = [
+        M.Genero(nombre="Novela"),
+        M.Genero(nombre="Ciencia"),
+        M.Genero(nombre="Informática"),
+        M.Genero(nombre="Historia"),
+        M.Genero(nombre="Fantasía"),
+    ]
+    autores = [
+        M.Autor(nombre="Jorge Luis Borges"),
+        M.Autor(nombre="Carl Sagan"),
+        M.Autor(nombre="Robert C. Martin"),
+        M.Autor(nombre="Isabel Allende"),
+        M.Autor(nombre="Frank Herbert"),
+        M.Autor(nombre="Ada Lovelace"),
+    ]
+    editoriales = [
+        M.Editorial(descripcion="Sudamericana"),
+        M.Editorial(descripcion="Planeta"),
+        M.Editorial(descripcion="Prentice Hall"),
+        M.Editorial(descripcion="Editorial Universitaria"),
+        M.Editorial(descripcion="DeBolsillo"),
+    ]
+
     db.add_all(sedes + socios + generos + autores + editoriales)
     db.flush()
-    libros = [
-        M.Libro(titulo="Ficciones", isbn="9788420633121", genero_id=generos[0].id, autor_id=autores[0].id, editorial_id=editoriales[0].id),
-        M.Libro(titulo="Cosmos", isbn="9788408175186", genero_id=generos[1].id, autor_id=autores[1].id, editorial_id=editoriales[1].id),
-        M.Libro(titulo="Clean Code", isbn="9780132350884", genero_id=generos[2].id, autor_id=autores[2].id, editorial_id=editoriales[2].id),
+
+    libros_data = [
+        ("Ficciones", "9788420633121", 1, 1, 1),
+        ("Cosmos", "9788408175186", 2, 2, 2),
+        ("Clean Code", "9780132350884", 3, 3, 3),
+        ("La casa de los espíritus", "9788408206325", 1, 4, 2),
+        ("Dune", "9788445009101", 5, 5, 5),
+        ("Historia de la informática", "9789504345550", 3, 6, 4),
+        ("El Aleph", "9788420640494", 1, 1, 1),
+        ("Pale Blue Dot", "9788499892789", 2, 2, 5),
+        ("The Pragmatic Programmer", "9780201616224", 3, 3, 3),
+        ("Eva Luna", "9788408067887", 1, 4, 2),
+        ("El mesías de Dune", "9788420675672", 5, 5, 5),
+        ("Enigma de las máquinas", "9789504521125", 4, 6, 4),
     ]
-    db.add_all(libros)
+    libros = []
+    for titulo, isbn, genero_idx, autor_idx, editorial_idx in libros_data:
+        libro = M.Libro(
+            titulo=titulo,
+            isbn=isbn,
+            genero_id=generos[genero_idx - 1].id,
+            autor_id=autores[autor_idx - 1].id,
+            editorial_id=editoriales[editorial_idx - 1].id,
+        )
+        db.add(libro)
+        libros.append(libro)
     db.flush()
-    for i, libro in enumerate(libros):
-        for sede in (sedes[i % 3], sedes[(i + 1) % 3]):
-            for _ in range(2):
-                ej = M.Ejemplar(libro_id=libro.id, sede_id=sede.id)
-                db.add(ej)
+
+    ejemplares = []
+    for idx, libro in enumerate(libros):
+        for sede_idx, sede in enumerate(sedes):
+            cantidad = 2 if (idx + sede_idx) % 3 else 1
+            for nro in range(cantidad):
+                ejemplar = M.Ejemplar(libro_id=libro.id, sede_id=sede.id, estado_id=E.EstadoEjemplar.DISPONIBLE)
+                db.add(ejemplar)
                 db.flush()
-                ej.codigo_inventario = f"EJ-{ej.id:06d}"
+                ejemplar.codigo_inventario = f"INV-{ejemplar.id:06d}"
+                ejemplares.append(ejemplar)
+    db.flush()
+
+    reservas = [
+        M.Reserva(socio_id=socios[0].id, libro_id=libros[0].id, sede_id=sedes[0].id, estado_id=E.EstadoReserva.ACTIVA, fecha=now - timedelta(days=2)),
+        M.Reserva(socio_id=socios[1].id, libro_id=libros[2].id, sede_id=sedes[1].id, estado_id=E.EstadoReserva.ACTIVA, fecha=now - timedelta(days=1)),
+        M.Reserva(socio_id=socios[2].id, libro_id=libros[4].id, sede_id=sedes[2].id, estado_id=E.EstadoReserva.CUMPLIDA, fecha=now - timedelta(days=12)),
+        M.Reserva(socio_id=socios[3].id, libro_id=libros[6].id, sede_id=sedes[0].id, estado_id=E.EstadoReserva.CANCELADA, fecha=now - timedelta(days=8)),
+    ]
+    db.add_all(reservas)
+
+    # Cada operación debe referenciar un ejemplar del libro y sede indicados.
+    ejemplares_disponibles = [
+        next(e for e in ejemplares if e.libro_id == libro.id and e.sede_id == sede.id)
+        for libro, sede in [
+            (libros[0], sedes[0]),
+            (libros[3], sedes[1]),
+            (libros[5], sedes[2]),
+            (libros[8], sedes[0]),
+        ]
+    ]
+    if len(ejemplares_disponibles) >= 4:
+        prestamos = [
+            M.Prestamo(
+                socio_id=socios[0].id,
+                libro_id=libros[0].id,
+                ejemplar_id=ejemplares_disponibles[0].id,
+                sede_origen_id=sedes[0].id,
+                sede_destino_id=sedes[1].id,
+                estado_id=E.EstadoPrestamo.ACTIVO,
+                fecha_solicitud=now - timedelta(days=8),
+                fecha_prestamo=now - timedelta(days=7),
+                fecha_vencimiento=date.today() + timedelta(days=6),
+            ),
+            M.Prestamo(
+                socio_id=socios[1].id,
+                libro_id=libros[3].id,
+                ejemplar_id=ejemplares_disponibles[1].id,
+                sede_origen_id=sedes[1].id,
+                sede_destino_id=sedes[2].id,
+                estado_id=E.EstadoPrestamo.ACTIVO,
+                fecha_solicitud=now - timedelta(days=12),
+                fecha_prestamo=now - timedelta(days=10),
+                fecha_vencimiento=date.today() - timedelta(days=2),
+            ),
+            M.Prestamo(
+                socio_id=socios[2].id,
+                libro_id=libros[5].id,
+                ejemplar_id=ejemplares_disponibles[2].id,
+                sede_origen_id=sedes[2].id,
+                sede_destino_id=sedes[2].id,
+                estado_id=E.EstadoPrestamo.DEVUELTO,
+                fecha_solicitud=now - timedelta(days=25),
+                fecha_prestamo=now - timedelta(days=21),
+                fecha_vencimiento=date.today() - timedelta(days=3),
+                fecha_devolucion=now - timedelta(days=2),
+            ),
+            M.Prestamo(
+                socio_id=socios[4].id,
+                libro_id=libros[8].id,
+                ejemplar_id=ejemplares_disponibles[3].id,
+                sede_origen_id=sedes[0].id,
+                sede_destino_id=sedes[2].id,
+                estado_id=E.EstadoPrestamo.SOLICITADO,
+                fecha_solicitud=now - timedelta(days=1),
+            ),
+        ]
+        ejemplares_disponibles[0].estado_id = E.EstadoEjemplar.PRESTADO
+        ejemplares_disponibles[1].estado_id = E.EstadoEjemplar.PRESTADO
+        ejemplares_disponibles[3].estado_id = E.EstadoEjemplar.RESERVADO
+        db.add_all(prestamos)
+        db.flush()
+
+        for prestamo, estado_fisico, observacion in [
+            (prestamos[2], "BUENO", "Devolución en perfecto estado"),
+        ]:
+            db.add(
+                M.Devolucion(
+                    prestamo_id=prestamo.id,
+                    sede_id=prestamo.sede_destino_id,
+                    fecha=now - timedelta(days=2),
+                    estado_fisico=estado_fisico,
+                    observacion=observacion,
+                    dias_atraso=0,
+                    multa=0,
+                )
+            )
+
     db.commit()

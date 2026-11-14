@@ -1,12 +1,12 @@
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import enums as E
 from app.config import settings
 from app.errors import ConflictoError, ReglaNegocioError
-from app.models import REMITO_SEQ, Ejemplar, HistorialRemito, Prestamo, Remito
+from app.models import Ejemplar, HistorialRemito, Prestamo, Remito
 from app.patterns.remito_state import estado_de
 from app.services.common import (
     ESTADO_EJEMPLAR_POR_FISICO,
@@ -32,6 +32,22 @@ def registrar_historial(
     )
 
 
+def _generar_numero_remito(db: Session) -> str:
+    ultimo_numero = db.scalar(select(Remito.numero).order_by(Remito.id.desc()).limit(1))
+    siguiente = 1
+
+    if ultimo_numero:
+        try:
+            siguiente = int(str(ultimo_numero).split("-")[-1]) + 1
+        except ValueError:
+            siguiente = (db.scalar(select(func.max(Remito.id))) or 0) + 1
+
+    while db.scalar(select(Remito.id).where(Remito.numero == f"REM-{siguiente:06d}")) is not None:
+        siguiente += 1
+
+    return f"REM-{siguiente:06d}"
+
+
 def crear_remito(
     db: Session,
     *,
@@ -41,9 +57,10 @@ def crear_remito(
     destino_id: int,
     observacion: str | None = None,
 ) -> Remito:
-    numero = db.scalar(select(REMITO_SEQ.next_value()))
+    exigir_sede_activa(prestamo.sede_origen, "origen")
+    exigir_sede_activa(prestamo.sede_destino, "destino")
     remito = Remito(
-        numero=f"REM-{numero:06d}",
+        numero=_generar_numero_remito(db),
         tipo=tipo.value,
         prestamo_id=prestamo.id,
         ejemplar_id=prestamo.ejemplar_id,
